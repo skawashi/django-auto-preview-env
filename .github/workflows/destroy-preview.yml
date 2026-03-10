@@ -1,0 +1,47 @@
+name: Destroy Preview Environment
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  AWS_REGION: ap-northeast-1
+  SERVICE_NAME: pr-${{ github.event.pull_request.number }}-preview
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Delete App Runner Service
+        run: |
+          # サービスARNを取得
+          SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='${SERVICE_NAME}'].ServiceArn" --output text)
+          
+          if [ -n "$SERVICE_ARN" ] && [ "$SERVICE_ARN" != "None" ]; then
+            echo "Deleting App Runner service: ${SERVICE_NAME}"
+            aws apprunner delete-service --service-arn ${SERVICE_ARN}
+          else
+            echo "Service ${SERVICE_NAME} not found. Nothing to delete."
+          fi
+
+      - name: Comment PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🗑️ **Preview Environment has been destroyed.**\n\nPRがクローズされたため、リソース（App Runner）を削除しました。`
+            })

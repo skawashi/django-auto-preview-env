@@ -1,0 +1,89 @@
+name: Deploy Preview Environment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# AWS OIDC認証用のパーミッション
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  AWS_REGION: ap-northeast-1
+  ECR_REPOSITORY: django-preview-env
+  # App Runnerサービス名にはPR番号を付与して一意にします
+  SERVICE_NAME: pr-${{ github.event.pull_request.number }}-preview
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. AWS認証 (OIDCアプローチ)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # IAMロールのARNをリポジトリのSecretsに設定しておく必要があります
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 2. Amazon ECR へのログイン
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 3. DockerイメージのビルドとPush
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: pr-${{ github.event.pull_request.number }}-${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "image_uri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # 4. AWS App Runner の作成または更新
+      - name: Deploy to App Runner
+        id: deploy-apprunner
+        env:
+          IMAGE_URI: ${{ steps.build-image.outputs.image_uri }}
+          # App Runner用に作成したIAMロール（ECRへのPull権限など）
+          ACCESS_ROLE_ARN: ${{ secrets.APP_RUNNER_ACCESS_ROLE_ARN }}
+        run: |
+          # 既にサービスが存在するか確認
+          SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='${SERVICE_NAME}'].ServiceArn" --output text)
+          
+          if [ -z "$SERVICE_ARN" ] || [ "$SERVICE_ARN" == "None" ]; then
+            echo "Creating new App Runner service..."
+            CREATE_OUTPUT=$(aws apprunner create-service \
+              --service-name ${SERVICE_NAME} \
+              --source-configuration "{\"AuthenticationConfiguration\":{\"AccessRoleArn\":\"${ACCESS_ROLE_ARN}\"},\"ImageRepository\":{\"ImageIdentifier\":\"${IMAGE_URI}\",\"ImageRepositoryType\":\"ECR\",\"ImageConfiguration\":{\"Port\":\"8000\"}}}" \
+              --instance-configuration "{\"Cpu\":\"1 vCPU\",\"Memory\":\"2 GB\"}")
+            SERVICE_URL=$(echo $CREATE_OUTPUT | jq -r '.Service.ServiceUrl')
+            echo "service_url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          else
+            echo "Updating existing App Runner service..."
+            UPDATE_OUTPUT=$(aws apprunner update-service \
+              --service-arn ${SERVICE_ARN} \
+              --source-configuration "{\"AuthenticationConfiguration\":{\"AccessRoleArn\":\"${ACCESS_ROLE_ARN}\"},\"ImageRepository\":{\"ImageIdentifier\":\"${IMAGE_URI}\",\"ImageRepositoryType\":\"ECR\",\"ImageConfiguration\":{\"Port\":\"8000\"}}}")
+            SERVICE_URL=$(echo $UPDATE_OUTPUT | jq -r '.Service.ServiceUrl')
+            echo "service_url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          fi
+
+      # 5. PRに発行されたURLをコメントする
+      - name: Comment PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = 'https://${{ steps.deploy-apprunner.outputs.service_url }}';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 **Preview Environment is ready!**\n\nアクセスはこちらから: [${url}](${url})\n\n(※初回起動や反映に数分かかる場合があります)`
+            })
