@@ -27,6 +27,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+# プレビュー環境（App Runner）で動的に発行されるすべてのサブドメインを許可する
+CSRF_TRUSTED_ORIGINS = ['https://*.awsapprunner.com']
+
 
 # Application definition
 
