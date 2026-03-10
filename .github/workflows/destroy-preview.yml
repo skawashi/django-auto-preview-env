@@ -3,6 +3,9 @@ name: Destroy Preview Environment
 on:
   pull_request:
     types: [closed]
+    branches:
+      - develop
+      - staging
 
 permissions:
   id-token: write

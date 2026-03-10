@@ -3,6 +3,9 @@ name: Deploy Preview Environment
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    branches:
+      - develop
+      - staging
 
 # AWS OIDC認証用のパーミッション
 permissions:
