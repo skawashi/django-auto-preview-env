@@ -1,0 +1,32 @@
+[
+  {
+    "model": "todos.todo",
+    "pk": 1,
+    "fields": {
+      "title": "プレビュー環境の構築",
+      "description": "GitHub ActionsとAWS App Runnerを使って、PR毎のプレビュー環境を構築する。",
+      "completed": true,
+      "created_at": "2026-03-10T00:00:00Z"
+    }
+  },
+  {
+    "model": "todos.todo",
+    "pk": 2,
+    "fields": {
+      "title": "フィクスチャデータのロード確認",
+      "description": "初期データが自動でデータベースに流し込まれるかテストする。",
+      "completed": false,
+      "created_at": "2026-03-10T00:10:00Z"
+    }
+  },
+  {
+    "model": "todos.todo",
+    "pk": 3,
+    "fields": {
+      "title": "App Runnerの削除確認",
+      "description": "PRをクローズした時にリソースが自動削除されるか確認する。",
+      "completed": false,
+      "created_at": "2026-03-10T00:20:00Z"
+    }
+  }
+]

@@ -21,8 +21,8 @@ else:
 "
 
 # プレビュー環境用に初期データを投入したい場合はここで実行します
-# echo "Loading initial data..."
-# python manage.py loaddata fixtures/initial_data.json
+echo "Loading initial data..."
+python manage.py loaddata fixtures/initial_data.json
 
 # 静的ファイルの収集
 echo "Collecting static files..."
