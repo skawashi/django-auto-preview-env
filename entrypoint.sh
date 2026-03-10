@@ -5,6 +5,21 @@ set -e
 echo "Running migrations..."
 python manage.py migrate --noinput
 
+echo "Creating superuser if not exists..."
+python -c "
+import os
+import django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'myproject.settings')
+django.setup()
+from django.contrib.auth import get_user_model
+User = get_user_model()
+if not User.objects.filter(username='admin').exists():
+    User.objects.create_superuser('admin', 'admin@example.com', 'admin')
+    print('Superuser created successfully.')
+else:
+    print('Superuser already exists. Skipping...')
+"
+
 # プレビュー環境用に初期データを投入したい場合はここで実行します
 # echo "Loading initial data..."
 # python manage.py loaddata fixtures/initial_data.json
