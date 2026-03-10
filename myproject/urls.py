@@ -16,7 +16,12 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from django.http import HttpResponse
+
+def home(request):
+    return HttpResponse("<h1>Hello, Auto Preview Environment!</h1><p>This is a change from feature/first-pr branch.</p>")
 
 urlpatterns = [
+    path('', home, name='home'),
     path('admin/', admin.site.urls),
 ]
